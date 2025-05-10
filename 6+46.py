@@ -3,7 +3,7 @@ import random
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter
 from PyQt5.QtWidgets import QApplication, QWidget
-
+#
 # 設置窗口大小和顏色
 WIDTH = 600
 HEIGHT = 400
