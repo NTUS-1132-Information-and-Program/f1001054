@@ -1,92 +1,135 @@
+
 import tkinter as tk
 from tkinter import messagebox
 
-# 定義棋盤大小
-GRID_SIZE = 15
+BOARD_SIZE = 15
 CELL_SIZE = 40
-turn = 1  # 1 為黑子，2 為白子
+STONE_RADIUS = 16
 
-# 初始化棋盤
-board = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+HUMAN = 1
+AI = 2
 
-# 判斷是否有玩家獲勝
-def check_winner():
-    # 檢查橫向、縱向、斜向
-    for x in range(GRID_SIZE):
-        for y in range(GRID_SIZE):
-            if board[x][y] != 0:
-                # 橫向檢查
-                if y + 4 < GRID_SIZE and all(board[x][y + i] == board[x][y] for i in range(5)):
-                    return board[x][y]
-                # 縱向檢查
-                if x + 4 < GRID_SIZE and all(board[x + i][y] == board[x][y] for i in range(5)):
-                    return board[x][y]
-                # 右下斜向檢查
-                if x + 4 < GRID_SIZE and y + 4 < GRID_SIZE and all(board[x + i][y + i] == board[x][y] for i in range(5)):
-                    return board[x][y]
-                # 右上斜向檢查
-                if x - 4 >= 0 and y + 4 < GRID_SIZE and all(board[x - i][y + i] == board[x][y] for i in range(5)):
-                    return board[x][y]
-    return 0  # 沒有獲勝者
+# 權重表：由大到小代表五連、活四、三連、雙連、單子
+SCORES = {5: 100000, 4: 10000, 3: 1000, 2: 100, 1: 10}
 
-# 繪製棋盤和棋子
-def draw_board():
-    canvas.delete("all")
-    for x in range(GRID_SIZE):
-        for y in range(GRID_SIZE):
-            canvas.create_rectangle(y * CELL_SIZE, x * CELL_SIZE,
-                                    (y + 1) * CELL_SIZE, (x + 1) * CELL_SIZE,
-                                    outline="black", width=1)
+class GomokuGame:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("五子棋（中階 AI 加強防守版）")
+        self.canvas = tk.Canvas(root, width=BOARD_SIZE * CELL_SIZE, height=BOARD_SIZE * CELL_SIZE, bg="burlywood")
+        self.canvas.pack()
+        self.board = [[0] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+        self.current_player = HUMAN
+        self.ai_enabled = tk.BooleanVar(value=True)
 
-            if board[x][y] == 1:
-                canvas.create_oval(y * CELL_SIZE + 5, x * CELL_SIZE + 5,
-                                   (y + 1) * CELL_SIZE - 5, (x + 1) * CELL_SIZE - 5,
-                                   fill="black")
-            elif board[x][y] == 2:
-                canvas.create_oval(y * CELL_SIZE + 5, x * CELL_SIZE + 5,
-                                   (y + 1) * CELL_SIZE - 5, (x + 1) * CELL_SIZE - 5,
-                                   fill="white")
+        # 控制列
+        ctrl_frame = tk.Frame(root)
+        ctrl_frame.pack()
+        tk.Button(ctrl_frame, text="重新開始", command=self.restart_game).pack(side=tk.LEFT, padx=5)
+        tk.Checkbutton(ctrl_frame, text="AI 模式", variable=self.ai_enabled).pack(side=tk.LEFT)
 
-# 處理玩家點擊的事件
-def on_click(event):
-    global turn
-    x, y = event.y // CELL_SIZE, event.x // CELL_SIZE
+        self.canvas.bind("<Button-1>", self.handle_click)
+        self.draw_board()
 
-    if board[x][y] == 0:  # 如果該位置空著
-        board[x][y] = turn
-        turn = 3 - turn  # 換玩家，1 變 2，2 變 1
-        draw_board()
+    def draw_board(self):
+        for i in range(BOARD_SIZE):
+            self.canvas.create_line(CELL_SIZE//2, CELL_SIZE//2 + i*CELL_SIZE,
+                                    CELL_SIZE//2 + (BOARD_SIZE-1)*CELL_SIZE, CELL_SIZE//2 + i*CELL_SIZE)
+            self.canvas.create_line(CELL_SIZE//2 + i*CELL_SIZE, CELL_SIZE//2,
+                                    CELL_SIZE//2 + i*CELL_SIZE, CELL_SIZE//2 + (BOARD_SIZE-1)*CELL_SIZE)
 
-        winner = check_winner()
-        if winner != 0:
-            winner_color = "黑子" if winner == 1 else "白子"
-            messagebox.showinfo("遊戲結束", f"{winner_color} 獲勝！")
-            reset_game()
+    def handle_click(self, event):
+        if self.current_player != HUMAN:
+            return
+        col = round((event.x - CELL_SIZE//2) / CELL_SIZE)
+        row = round((event.y - CELL_SIZE//2) / CELL_SIZE)
+        if 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE and self.board[row][col] == 0:
+            self.make_move(row, col, HUMAN)
+            if self.check_win(row, col):
+                self.end_game("玩家（黑棋）勝利！")
+                return
+            if self.ai_enabled.get():
+                self.current_player = AI
+                self.root.after(300, self.ai_move)
 
-# 重設遊戲
-def reset_game():
-    global board, turn
-    board = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-    turn = 1  # 從黑子開始
-    draw_board()
+    def make_move(self, row, col, player):
+        self.board[row][col] = player
+        self.draw_stone(row, col, player)
 
-# 設定視窗
-root = tk.Tk()
-root.title("五子棋")
+    def ai_move(self):
+        row, col = self.find_best_move()
+        self.make_move(row, col, AI)
+        if self.check_win(row, col):
+            self.end_game("AI（白棋）勝利！")
+            return
+        self.current_player = HUMAN
 
-# 創建畫布
-canvas = tk.Canvas(root, width=GRID_SIZE * CELL_SIZE, height=GRID_SIZE * CELL_SIZE, bg="#f0e4d7")
-canvas.pack()
+    def draw_stone(self, row, col, player):
+        x = CELL_SIZE // 2 + col * CELL_SIZE
+        y = CELL_SIZE // 2 + row * CELL_SIZE
+        color = "black" if player == HUMAN else "white"
+        self.canvas.create_oval(x - STONE_RADIUS, y - STONE_RADIUS,
+                                x + STONE_RADIUS, y + STONE_RADIUS,
+                                fill=color)
 
-# 綁定點擊事件
-canvas.bind("<Button-1>", on_click)
+    def find_best_move(self):
+        best_score = -1
+        best_move = (BOARD_SIZE // 2, BOARD_SIZE // 2)
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                if self.board[r][c] == 0:
+                    score = self.evaluate(r, c, AI) + self.evaluate(r, c, HUMAN) * 1.1  # 加強防守
+                    if score > best_score:
+                        best_score = score
+                        best_move = (r, c)
+        return best_move
 
-# 初始化棋盤畫面
-draw_board()
+    def evaluate(self, row, col, player):
+        total = 0
+        directions = [(1,0), (0,1), (1,1), (1,-1)]
+        for dr, dc in directions:
+            count = 1  # 自己這一步
+            for d in [1, -1]:
+                for i in range(1, 5):
+                    r, c = row + dr*i*d, col + dc*i*d
+                    if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
+                        if self.board[r][c] == player:
+                            count += 1
+                        elif self.board[r][c] != 0:
+                            break
+                    else:
+                        break
+            total += SCORES.get(count, 0)
+        return total
 
-# 添加重設遊戲按鈕
-reset_button = tk.Button(root, text="重新開始", command=reset_game)
-reset_button.pack(pady=10)
+    def check_win(self, row, col):
+        def count(dx, dy):
+            cnt = 1
+            for d in [1, -1]:
+                r, c = row + dy*d, col + dx*d
+                while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == self.board[row][col]:
+                    cnt += 1
+                    r += dy*d
+                    c += dx*d
+            return cnt
+        for dx, dy in [(1,0), (0,1), (1,1), (1,-1)]:
+            if count(dx, dy) >= 5:
+                return True
+        return False
 
-# 運行主循環
-root.mainloop()
+    def end_game(self, message):
+        messagebox.showinfo("遊戲結束", message)
+        self.canvas.unbind("<Button-1>")
+
+    def restart_game(self):
+        self.canvas.delete("all")
+        self.board = [[0] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+        self.current_player = HUMAN
+        self.draw_board()
+        self.canvas.bind("<Button-1>", self.handle_click)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = GomokuGame(root)
+    root.mainloop()
+
