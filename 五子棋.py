@@ -9,20 +9,18 @@ STONE_RADIUS = 16
 HUMAN = 1
 AI = 2
 
-# 權重表：由大到小代表五連、活四、三連、雙連、單子
 SCORES = {5: 100000, 4: 10000, 3: 1000, 2: 100, 1: 10}
 
 class GomokuGame:
     def __init__(self, root):
         self.root = root
-        self.root.title("五子棋（中階 AI 加強防守版）")
+        self.root.title("五子棋 AI（攻防平衡版）")
         self.canvas = tk.Canvas(root, width=BOARD_SIZE * CELL_SIZE, height=BOARD_SIZE * CELL_SIZE, bg="burlywood")
         self.canvas.pack()
         self.board = [[0] * BOARD_SIZE for _ in range(BOARD_SIZE)]
         self.current_player = HUMAN
         self.ai_enabled = tk.BooleanVar(value=True)
 
-        # 控制列
         ctrl_frame = tk.Frame(root)
         ctrl_frame.pack()
         tk.Button(ctrl_frame, text="重新開始", command=self.restart_game).pack(side=tk.LEFT, padx=5)
@@ -39,18 +37,20 @@ class GomokuGame:
                                     CELL_SIZE//2 + i*CELL_SIZE, CELL_SIZE//2 + (BOARD_SIZE-1)*CELL_SIZE)
 
     def handle_click(self, event):
-        if self.current_player != HUMAN:
-            return
         col = round((event.x - CELL_SIZE//2) / CELL_SIZE)
         row = round((event.y - CELL_SIZE//2) / CELL_SIZE)
         if 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE and self.board[row][col] == 0:
-            self.make_move(row, col, HUMAN)
+            self.make_move(row, col, self.current_player)
             if self.check_win(row, col):
-                self.end_game("玩家（黑棋）勝利！")
+                winner = "玩家（黑棋）" if self.current_player == HUMAN else "玩家（白棋）"
+                self.end_game(f"{winner} 勝利！")
                 return
             if self.ai_enabled.get():
-                self.current_player = AI
-                self.root.after(300, self.ai_move)
+                if self.current_player == HUMAN:
+                    self.current_player = AI
+                    self.root.after(300, self.ai_move)
+            else:
+                self.current_player = HUMAN if self.current_player == AI else AI
 
     def make_move(self, row, col, player):
         self.board[row][col] = player
@@ -78,9 +78,11 @@ class GomokuGame:
         for r in range(BOARD_SIZE):
             for c in range(BOARD_SIZE):
                 if self.board[r][c] == 0:
-                    score = self.evaluate(r, c, AI) + self.evaluate(r, c, HUMAN) * 1.1  # 加強防守
-                    if score > best_score:
-                        best_score = score
+                    offense_score = self.evaluate(r, c, AI)
+                    defense_score = self.evaluate(r, c, HUMAN) * 1.1
+                    total_score = offense_score + defense_score
+                    if total_score > best_score:
+                        best_score = total_score
                         best_move = (r, c)
         return best_move
 
@@ -88,7 +90,7 @@ class GomokuGame:
         total = 0
         directions = [(1,0), (0,1), (1,1), (1,-1)]
         for dr, dc in directions:
-            count = 1  # 自己這一步
+            count = 1
             for d in [1, -1]:
                 for i in range(1, 5):
                     r, c = row + dr*i*d, col + dc*i*d
@@ -132,4 +134,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     game = GomokuGame(root)
     root.mainloop()
-
